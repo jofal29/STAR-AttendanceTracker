@@ -1,14 +1,14 @@
-# Project Title
+# Attendance Tracker! for ECST and other Programs
 
 ## Description
-A brief description of what your project does.
+An attendance tracker that takes input data from NFC tags through a ACR122U NFC Reader, so that students and participants of events can have ease of access to university events.
 
 ## Features
 - Feature 1
 - Feature 2
 
 ## Installation
-Instructions on how to install and set up your project.
+We're using PyInstaller to allow anybody with a Windows computer to download and use our attendance tracker!
 
 ## Usage
 Examples of how to use your project.
