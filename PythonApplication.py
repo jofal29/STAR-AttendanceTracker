@@ -6,7 +6,7 @@ from smartcard.System import readers                # Import readers to interact
 from smartcard.util import toHexString              # Import toHexString to convert byte data to hex string
 from smartcard.Exceptions import NoCardException    # Import NoCardException for error handling
 import tkinter as tk                                # Import tkinter for creating the GUI
-import tkinterFileDialog
+#import tkinterFileDialog
 from tkinter import ttk                             # Import ttk for themed tkinter widgets
 import threading                                    # Import threading for running NFC reading in a separate thread
 import openpyxl
@@ -22,7 +22,7 @@ CUSTOM_EVENT = '<<AttendanceLogged>>'
 csv_path = os.path.join(os.path.expanduser('~'), 'Documents', 'Fall2024Events', eventName, 'attendance.csv') 
 
 # Path to Excel file in OneDrive Folder for Students
-onedrive_path = os.path.join(os.path.expanduser('~'), 'OneDrive - Cal State LA', 'ECST Students.xlsx')
+onedrive_path = os.path.join(os.path.expanduser('~'), 'OneDrive - Cal State LA', 'Registered ECST Transfers.xlsx')
 
 # The line creates a path that points to a file named attendance.csv in the Documents folder of the user's home directory.
 # os.path.expanduser('~'):
@@ -105,44 +105,35 @@ def write_nfc(firstName, lastName, cin, major):
         print(f"Failed to connect to card: {e}")
         return False
 
-    data = f"FirstName{firstName}LastName{lastName}CinNumber{cin}Major{major}End"
-    print(data)
-    start_block = 4  # Adjust this if needed for your specific NFC tag
-    max_length = 121  # Adjust based on your tag's capacity
+    # Format the data to match the expected read format
+    data = f"CinNumber{cin}FirstName{firstName}LastName{lastName}Major{major}End"
+    # print(f"Data to write: {data}")
+    start_block = 4
+    max_length = 121
 
     if len(data) > max_length:
         print(f"Data too long ({len(data)} bytes). Maximum is {max_length} bytes.")
         return False
-    
-    print(f"check")
 
-    # Convert each character to its decimal ASCII value
-    decimal_values = [ord(char) for char in data]
+    # Convert string to bytes
+    data_bytes = data.encode('ascii')
 
-    # Convert each decimal value to a two-digit hexadecimal string
-    hex_values = [format(num, '02x') for num in decimal_values]
+    # Write data in 4-byte blocks
+    for i in range(0, len(data_bytes), 4):
+        block = start_block + (i // 4)
+        chunk = data_bytes[i:i+4].ljust(4, b'\x00')  # Pad with null bytes if needed
 
-    # Join the hexadecimal values with spaces 
-    hex_string_with_spaces = ' '.join(hex_values)
+        write_command = [0xFF, 0xD6, 0x00, block, 0x04] + list(chunk)
+        # print(f"Writing to block {block}: {write_command}")
 
-    print(hex_string_with_spaces)
-
-
-
-    # for i in range(0, len(data), 4):
-    #     block = start_block + (i // 4)
-    #     chunk = data[i:i+4].ljust(4)
-    #     hexData = toBytes(chunk)
-    #     print(hexData)
-    #     write_command = [0xFF, 0xD6, 0x00, block, 0x04]
-    #     try:
-    #         response = connection.transmit(write_command)
-    #         if response[1] != 0x90:
-    #             print(f"Write failed at block {block}: SW1SW2 = {hex(response[1])}{hex(response[2])}")
-    #             return False
-    #     except Exception as e:
-    #         print(f"Error writing to block {block}: {e}")
-    #         return False
+        try:
+            response = connection.transmit(write_command)
+            if response[1] != 0x90 or response[2] != 0x00:
+                print(f"Write failed for block {block}. Response: {response}")
+                return False
+        except Exception as e:
+            print(f"Error writing to block {block}: {e}")
+            return False
 
     print("Write operation completed successfully")
     return True
@@ -256,7 +247,7 @@ def read_nfc():
             major_start = result.find("Major")
             if major_start != -1:
                 # Extract only the numeric part after "CinNumber"
-                major = result[major_start+5:major_start+4+maj_length]
+                major = result[major_start+5:major_start+5+maj_length]
                 
                 if stated == True:
                     stated = False
@@ -270,12 +261,12 @@ def read_nfc():
                 print(f"{firstName} {lastName} has already signed in. \n")
                 signIn_statedAlready = True
         else:
-            if signIn_statedAlready:
-                signIn_statedAlready = False
-            print(f"CIN#: {cin_number}")
-            print(f"First Name: {firstName}")
-            print(f"Last Name: {lastName}")                
-            print(f"Major: {major}")    
+            signIn_statedAlready = False
+
+            # print(f"\nCIN#: {cin_number}")
+            # print(f"First Name: {firstName}")
+            # print(f"Last Name: {lastName}")                
+            # print(f"Major: {major}")    
 
         if cin_number and firstName and lastName and major:
             signIn_statedAlready = True
@@ -346,23 +337,81 @@ def initialize_csv(root):
                 studentData = f"{row[0]},{row[1]},{row[2]},{row[3]},{row[4]}"
                 root.event_generate(CUSTOM_EVENT, when='now')
 
+def load_excel_data(gui):
+    try:
+        workbook = openpyxl.load_workbook(onedrive_path)
+        sheet = workbook.active
+        for row in range(2, sheet.max_row + 1):
+            firstName = sheet.cell(row=row, column=1).value
+            lastName = sheet.cell(row=row, column=2).value
+            cin = sheet.cell(row=row, column=3).value
+            major = sheet.cell(row=row, column=4).value
+            gui.excel_tree.insert('', 'end', values=(row, firstName, lastName, cin, major))
+    except Exception as e:
+        print(f"Error loading Excel data: {e}")
+
+def process_row_input(row_number):
+    try:
+        cin, firstName, lastName, major = get_registered_student_from_excel(row_number)
+        print(f"Writing data for {firstName} {lastName}...")
+        if write_nfc(firstName, lastName, cin, major):
+            print("Data written successfully. Please tap the NFC tag again to log attendance.")
+        else:
+            print("Failed to write data to NFC tag.")
+    except:
+        print("Failed to retrieve student data. Please check the row number and try again.")
+
 class AttendanceGUI:
-    global studentData
-
     def __init__(self, master):
-        self.master = master  # Store the root window
-        master.title("Attendance Tracker")  # Set the window title
+        self.master = master
+        master.title("Attendance Tracker")
 
-        self.tree = ttk.Treeview(master, columns=('Student CIN', 'First Name', 'Last Name', 'Major', 'Timestamp'), show='headings')  # Create a treeview widget
-        self.tree.heading('Student CIN', text='Student CIN#')  # Set column headings
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(master)
+        self.notebook.pack(fill=tk.BOTH, expand=1)
+
+        # Attendance Tab
+        self.attendance_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.attendance_frame, text='Attendance')
+
+        self.tree = ttk.Treeview(self.attendance_frame, columns=('Student CIN', 'First Name', 'Last Name', 'Major', 'Timestamp'), show='headings')
+        self.tree.heading('Student CIN', text='Student CIN#')
         self.tree.heading('First Name', text='First Name')
         self.tree.heading('Last Name', text='Last Name')
         self.tree.heading('Major', text='Major')
         self.tree.heading('Timestamp', text='Timestamp')
-        self.tree.pack(fill=tk.BOTH, expand=1)  # Pack the treeview widget
+        self.tree.pack(fill=tk.BOTH, expand=1)
+
+        # Excel Data Tab
+        self.excel_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.excel_frame, text='Excel Data')
+
+        self.excel_tree = ttk.Treeview(self.excel_frame, columns=('Row', 'First Name', 'Last Name', 'CIN', 'Major'), show='headings')
+        self.excel_tree.heading('Row', text='Row')
+        self.excel_tree.heading('First Name', text='First Name')
+        self.excel_tree.heading('Last Name', text='Last Name')
+        self.excel_tree.heading('CIN', text='CIN')
+        self.excel_tree.heading('Major', text='Major')
+        self.excel_tree.pack(fill=tk.BOTH, expand=1)
+
+        # Refresh button for Excel data
+        self.refresh_button = ttk.Button(self.excel_frame, text="Refresh Excel Data", command=self.refresh_excel_data)
+        self.refresh_button.pack()
+
+        # Input frame for row number
+        self.input_frame = ttk.Frame(master)
+        self.input_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        self.row_label = ttk.Label(self.input_frame, text="Enter Row Number:")
+        self.row_label.pack(side=tk.LEFT)
+
+        self.row_entry = ttk.Entry(self.input_frame)
+        self.row_entry.pack(side=tk.LEFT, padx=5)
+
+        self.submit_button = ttk.Button(self.input_frame, text="Submit", command=self.submit_row)
+        self.submit_button.pack(side=tk.LEFT)
 
         self.master.bind(CUSTOM_EVENT, self.handle_attendance_logged)
-        
 
     def handle_attendance_logged(self, event):
         try:
@@ -371,58 +420,49 @@ class AttendanceGUI:
         except Exception as e:
             print(f"Error handling attendance event: {e}")
 
+    def refresh_excel_data(self):
+        self.excel_tree.delete(*self.excel_tree.get_children())
+        load_excel_data(self)
+
+    def submit_row(self):
+        row_number = self.row_entry.get()
+        if row_number:
+            process_row_input(row_number)
+        self.row_entry.delete(0, tk.END)
+
 def main_loop():
     global studentData
-
     try:
-        while True:  # Continuous loop for reading NFC tags
-            print("     Waiting for a tag...    ", end='\r', flush=True)
-
-            ## uid = read_nfc()  # Read the NFC tag
+        while True:
+            print(" Waiting for a tag... ", end='\r', flush=True)
             status, cin, firstName, lastName, major = read_nfc()
             display = False
 
             if status == "EMPTY":
-                row_number = input("Empty NFC detected. Enter Excel row number of the student: ")
-                try:
-                    cin, firstName, lastName, major = get_registered_student_from_excel(row_number)
-                    print(f"Writing data for {firstName} {lastName}...")
-                    if write_nfc(firstName, lastName, cin, major):
-                        print("Data written successfully. Please tap the NFC tag again to log attendance.")
-                    else:
-                        print("Failed to write data to NFC tag.")
-                except:
-                    print("Failed to retrieve student data. Please check the row number and try again.")
-
-            if status == "SUCCESS":
-                if not is_cin_recorded(cin):  # If a tag is read successfully and doesn't exist yet
+                root.event_generate('<<EmptyNFC>>')  # Generate custom event for empty NFC
+            elif status == "SUCCESS":
+                if not is_cin_recorded(cin):
                     display = True
-                    student_id, student_firstName, student_lastName, student_major, timestamp = log_attendance(cin, firstName, lastName, major)  # Log the attendance
-
+                    student_id, student_firstName, student_lastName, student_major, timestamp = log_attendance(cin, firstName, lastName, major)
                     if display:
                         studentData = f"{student_id},{student_firstName},{student_lastName},{student_major},{timestamp}"
                         root.event_generate(CUSTOM_EVENT, when='now')
-
-            time.sleep(0.5)  # Short delay between reads
-
-    except KeyboardInterrupt:  # Handle script interruption
+            time.sleep(0.5)
+    except KeyboardInterrupt:
         print("\nScript stopped by user.")
 
 if __name__ == "__main__":
-    globalVar()         # Initialize global variables
-    root = tk.Tk()  # Create the main window
-    app = AttendanceGUI(root)  # Create the GUI application
-    root.event_generate
+    globalVar()
+    root = tk.Tk()
+    app = AttendanceGUI(root)
+    initialize_csv(root)
+    load_excel_data(app)  # Load initial Excel data
 
-    initialize_csv(root)    # Initialize the CSV file if it doesn't exist
     print("NFC Reader initialized. Waiting for tags...")
     print(f"Attendance is being logged to: {csv_path}")
     print("Press Ctrl+C in the console to stop the script.")
-    
-    
-    
-    # Start the NFC reading in a separate thread
+
     nfc_thread = threading.Thread(target=main_loop, daemon=True)
     nfc_thread.start()
-    
-    root.mainloop()  # Start the Tkinter event loop
+
+    root.mainloop()
