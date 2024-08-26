@@ -11,6 +11,7 @@ from tkinter import ttk                             # Import ttk for themed tkin
 import threading                                    # Import threading for running NFC reading in a separate thread
 import openpyxl
 from smartcard.util import toBytes
+from flask import Flask                             # Import flask for web application
 
 # eventName = input('Enter a name of the event (NO SPACES): ')
 eventName = "WelcomeMixer"
@@ -23,6 +24,10 @@ csv_path = os.path.join(os.path.expanduser('~'), 'Documents', 'Fall2024Events', 
 
 # Path to Excel file in OneDrive Folder for Students
 onedrive_path = os.path.join(os.path.expanduser('~'), 'OneDrive - Cal State LA', 'Registered ECST Transfers.xlsx')
+
+# Creating the flask app and URL's path component at root for the app
+app = Flask(__name__)
+@app.route("/")
 
 # The line creates a path that points to a file named attendance.csv in the Documents folder of the user's home directory.
 # os.path.expanduser('~'):
