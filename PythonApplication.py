@@ -7,19 +7,34 @@ from smartcard.util import toHexString              # Import toHexString to conv
 from smartcard.Exceptions import NoCardException    # Import NoCardException for error handling
 import tkinter as tk                                # Import tkinter for creating the GUI
 #import tkinterFileDialog
-from tkinter import ttk                             # Import ttk for themed tkinter widgets
+from tkinter import ttk, filedialog, simpledialog   # Import ttk for themed tkinter widgets
 import threading                                    # Import threading for running NFC reading in a separate thread
 import openpyxl
 from smartcard.util import toBytes
 
 # eventName = input('Enter a name of the event (NO SPACES): ')
-eventName = "WelcomeMixer"
+# eventName = "WelcomeMixer"
+# Function to get event name and folder location
+def get_event_details():
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    event_name = simpledialog.askstring("Event Name", "Enter the name of the event (No Spaces):")
+    if event_name is None:  # User cancelled
+        exit()
+    folder_path = filedialog.askdirectory(title="Select folder for event data")
+    if not folder_path:  # User cancelled
+        exit()
+    return event_name, folder_path
+
+# Get event details
+eventName, folder_path = get_event_details()
 
 # Define custom event
 CUSTOM_EVENT = '<<AttendanceLogged>>'
 
 # Set the path for the attendance CSV file
-csv_path = os.path.join(os.path.expanduser('~'), 'Documents', 'Fall2024Events', eventName, 'attendance.csv') 
+# csv_path = os.path.join(os.path.expanduser('~'), 'Documents', 'Fall2024Events', eventName, 'attendance.csv') 
+csv_path = os.path.join(folder_path, f"{eventName}_attendance.csv")
 
 # Path to Excel file in OneDrive Folder for Students
 onedrive_path = os.path.join(os.path.expanduser('~'), 'OneDrive - Cal State LA', 'Registered ECST Transfers.xlsx')
