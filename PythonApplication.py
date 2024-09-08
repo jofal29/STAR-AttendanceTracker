@@ -1,24 +1,51 @@
-import csv                                          # Import the CSV module for reading and writing CSV files
-import os                                           # Import the OS module for file and path operations
-import time                                         # Import the time module for adding delays
-from datetime import datetime                       # Import datetime for timestamp creation
-from smartcard.System import readers                # Import readers to interact with NFC readers
-from smartcard.util import toHexString              # Import toHexString to convert byte data to hex string
-from smartcard.Exceptions import NoCardException    # Import NoCardException for error handling
-import tkinter as tk                                # Import tkinter for creating the GUI
-#import tkinterFileDialog                           # Import the FileDialog for User to pick file path for csv_path and folder_path
-from tkinter import ttk, filedialog, simpledialog   # Import ttk for themed tkinter widgets
-import threading                                    # Import threading for running NFC reading in a separate thread
+#   --New-- 
+# altered attendance GUI: Added a text widget to the GUI to be able to display messages 
+# write_nfc: Added display messages: Who's data is being added, and if it was successful
+# read_nfc: Added display message to notify the user that theres no cin assigned which prompts them to assign accordingly
+# log_attendance: Added display messages to confirm students attendance and if theyve already been logged
+# imported messagebox from tkinter for error handling messages
+# For all exceptions, created an error message box for the user to see
+# __main__: display messages
+# attenance gui: added search functionality, 
+        # refractored functions for organization and to avoid confliting trees
+        # added text widgets for pop ups
+        # Added exit_gui function to ensure the program ends if the gui is gone
+# Added message box to the start of the program to prompt the user 
+# Added if in case they choose not to open a file which ends the program
+# Added new global variables
+        # previous_status : to prevent Waiting for Tag... message to keep repeating :b
+        # cin_not_recorded_message_displayed : to prevent NFC does not have CIN# recorded repeatidly  
+
+
+import csv                                                      # Import the CSV module for reading and writing CSV files
+import os                                                       # Import the OS module for file and path operations
+import time                                                     # Import the time module for adding delays
+from datetime import datetime                                   # Import datetime for timestamp creation
+from smartcard.System import readers                            # Import readers to interact with NFC readers
+from smartcard.util import toHexString                          # Import toHexString to convert byte data to hex string
+from smartcard.Exceptions import NoCardException                # Import NoCardException for error handling
+import tkinter as tk                                            # Import tkinter for creating the GUI
+#import tkinterFileDialog                                       # Import the FileDialog for User to pick file path for csv_path and folder_path
+from tkinter import ttk, messagebox, filedialog, simpledialog   # Import ttk for themed tkinter widgets
+import threading                                                # Import threading for running NFC reading in a separate thread
 import openpyxl
 from smartcard.util import toBytes
 # from flask import Flask                             # Import flask for web application
 
+# Show message box to prompt user for master list file
+messagebox.showinfo("Select Master List", "Please select the Excel file containing the master list of students.")
+
 # student_list = tk.filedialog.askopenfilename(title="yourmom", initaldir=os.path.expanduser('~'))   
 # print(student_list)
+
+# Now open the file dialog
 file_path = filedialog.askopenfilename(
         title="Master List of Students",
         filetypes=[("Excel Files", "*.xlsx"), ("All files", "*.*")],
     )
+if not file_path:
+    messagebox.showerror("Error", "No file selected. The program will now exit.")
+    exit()
 print(file_path)
 
 # eventName = input('Enter a name of the event (NO SPACES): ')
@@ -95,6 +122,12 @@ def globalVar():
     global studentData
     studentData = ""
 
+    global previous_status
+    previous_status = None
+
+    global display_noCin
+    display_noCin = True
+
 # Function to get data from registered students excel
 def get_registered_student_from_excel(rowNumber):
     print(f"Attempting to read from Excel file: {onedrive_path}")
@@ -117,42 +150,23 @@ def get_registered_student_from_excel(rowNumber):
         return cin, firstName, lastName, major
     
     except ValueError as e:
+        messagebox.showerror("Error", "{e}")
         print(f"Error: {e}")
         return None, None, None, None
 
     except FileNotFoundError:
+            messagebox.showerror("Error", "File not found. Retrying in 5 seconds...")
             print(f"File not found. Retrying in 5 seconds...")
             time.sleep(5)
 
     except Exception as e:  # Handle any other exceptions
+        messagebox.showerror("Error", "File not found. Retrying in 5 seconds...")
         print(f"Error reading card: {e}")
-
-# Function to set password 
-def set_password(connection, password):
-    # Convert password to bytes (assuming 4-byte password)
-    pwd_bytes = [int(password[i:i+2], 16) for i in range(0, len(password), 2)]
-    
-    # Write password to page 0x2B (43)
-    write_command = [0xFF, 0xD6, 0x00, 0x2B, 0x04] + pwd_bytes
-    response, sw1, sw2 = connection.transmit(write_command)
-    
-    if (sw1, sw2) != (0x90, 0x00):
-        print("Failed to write password")
-        return False
-    
-    # Enable password protection by writing to AUTH0 register (page 0x29)
-    auth0_command = [0xFF, 0xD6, 0x00, 0x29, 0x04, 0x04, 0x00, 0x00, 0x00]
-    response, sw1, sw2 = connection.transmit(auth0_command)
-    
-    if (sw1, sw2) != (0x90, 0x00):
-        print("Failed to enable password protection")
-        return False
-    
-    return True
 
 # Function to write NFC tag
 def write_nfc(firstName, lastName, cin, major):
     global readerStatusStated
+    
     connection = connectReader()
 
     if not connection:
@@ -162,8 +176,12 @@ def write_nfc(firstName, lastName, cin, major):
     try:
         connection.connect()
     except Exception as e:
+        app.display_message(f"Failed to connect to card: {e}")
         print(f"Failed to connect to card: {e}")
         return False
+    
+    # Allows the user to see that theyre assigned the NFC Tag
+    app.display_message(f"Writing data for {firstName} {lastName}...")
 
     # Format the data to match the expected read format
     data = f"CinNumber{cin}FirstName{firstName}LastName{lastName}Major{major}End"
@@ -177,7 +195,7 @@ def write_nfc(firstName, lastName, cin, major):
 
     # Convert string to bytes
     data_bytes = data.encode('ascii')
-
+    
     # Write data in 4-byte blocks
     for i in range(0, len(data_bytes), 4):
         block = start_block + (i // 4)
@@ -192,22 +210,12 @@ def write_nfc(firstName, lastName, cin, major):
                 print(f"Write failed for block {block}. Response: {response}")
                 return False
         except Exception as e:
+            app.show_error("Error", f"Error writing to block {block}: {e}")
             print(f"Error writing to block {block}: {e}")
             return False
 
     print("Write operation completed successfully")
-
-    # Set password after writing data 
-    try:
-        # Lines 183-193 are NEW
-        password = "FFFF0000"  # Example password
-        if set_password(connection, password):
-            print("Password set successfully")
-        else:
-            print("Failed to set password")
-    except Exception as e:
-        print(f"Error writing to NFC: {e}")
-        return False
+    app.display_message("Write operation completed successfully")
 
     return True
 
@@ -229,13 +237,26 @@ def connectReader():
     connection = reader.createConnection()  # Create a connection to the reader
     return connection
 
+def process_row_input(row_number):
+    try:
+        cin, firstName, lastName, major = get_registered_student_from_excel(row_number)
+        print(f"Writing data for {firstName} {lastName}...")
+
+        connection = connectReader()
+        if not connection:
+            print("Failed to connect to reader")
+            return
+        if write_nfc(firstName, lastName, cin, major):
+            print("Data written successfully. Please tap the NFC tag again to log attendance.")
+        else:
+            print("Failed to write data to NFC tag.")
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+
 # Function to read NFC tag
 def read_nfc():
-    global stated
-    global readerStatusStated
-    global existing_entries
-    global signIn_statedAlready
-
+    global stated, readerStatusStated, existing_entries, signIn_statedAlready, display_noCin
+    
     connection = connectReader()
 
     # Prevents from repeatedly saying that the card is not detected
@@ -287,7 +308,10 @@ def read_nfc():
                 if stated == True:
                     stated = False
             else:
-                print("NFC does not have a CIN# recorded in the data")
+                if display_noCin:
+                    app.display_message("NFC does not have a CIN# recorded in the data. \nPlease input a row number to assign data.")
+                    print("NFC does not have a CIN# recorded in the data")
+                    display_noCin = False
                 return ("EMPTY", None, None, None, None)
 
             firstName_start = result.find("FirstName")
@@ -332,6 +356,7 @@ def read_nfc():
         if is_cin_recorded(cin_number):
             if not signIn_statedAlready: 
                 print(f"{firstName} {lastName} has already signed in. \n")
+                app.display_message(f"\n{firstName} {lastName} has already signed in. \n")
                 signIn_statedAlready = True
         else:
             signIn_statedAlready = False
@@ -347,13 +372,17 @@ def read_nfc():
                 
     except NoCardException:  # Handle the case when no card is detected
         if stated == False:
+            app.display_message("No card detected. \nPlease place a card on the reader.")
             print("No card detected. Please place a card on the reader.")
             stated = True
+            display_noCin = True
         return ("NO_CARD", None, None, None, None)
         
     except Exception as e:  # Handle any other exceptions
         # print(f"Error reading card: {e}")
-        print(f"Card has been removed.")
+        app.display_message("Card has been removed.")
+        print("Card has been removed.")
+        
         if signIn_statedAlready:
                 signIn_statedAlready = False
         return ("ERROR", None, None, None, None)
@@ -370,8 +399,10 @@ def log_attendance(student_cin, student_firstName, student_lastName, student_maj
         with open(csv_path, 'a', newline='') as file:  # Open the CSV file in append mode
             writer = csv.writer(file)  # Create a CSV writer object
             writer.writerow([student_cin, student_firstName, student_lastName, student_major, timestamp])  # Write the attendance record
+        app.display_message(f"\nLogged attendance for {student_firstName} {student_lastName} at {timestamp}\n")
         print(f"Logged attendance for {student_firstName} {student_lastName} at {timestamp}\n")
     else:
+        app.display_message(f"CIN {student_cin} already recorded.")
         print(f"CIN {student_cin} already recorded.") 
         for entry in existing_entries:
             print(entry)
@@ -391,6 +422,7 @@ def initialize_csv(root):
             os.makedirs(directory)
             print(f"Created directory: {directory}")
     except OSError as e:
+        messagebox.showerror("Error", "Error creating a directory")
         print("Error creating a directory/n")
     
     # Check if the CSV file already exists
@@ -421,20 +453,29 @@ def load_excel_data(gui):
             major = sheet.cell(row=row, column=4).value
             gui.excel_tree.insert('', 'end', values=(row, firstName, lastName, cin, major))
     except Exception as e:
+        app.show_error("Error", f"Error loading Excel data: {e}")
         print(f"Error loading Excel data: {e}")
 
-def process_row_input(row_number):
-    try:
-        cin, firstName, lastName, major = get_registered_student_from_excel(row_number)
-        print(f"Writing data for {firstName} {lastName}...")
-        if write_nfc(firstName, lastName, cin, major):
-            print("Data written successfully. Please tap the NFC tag again to log attendance.")
-        else:
-            print("Failed to write data to NFC tag.")
-    except:
-        print("Failed to retrieve student data. Please check the row number and try again.")
-
 class AttendanceGUI:
+    def show_error(self, title, message):
+        self.master.after(0, lambda: messagebox.showerror(title, message))
+
+    def create_excel_treeview(self):
+        self.excel_tree = ttk.Treeview(self.excel_frame, columns=('Row', 'First Name', 'Last Name', 'CIN', 'Major'), show='headings')
+        for col in ['Row', 'First Name', 'Last Name', 'CIN', 'Major']:
+            self.excel_tree.heading(col, text=col)
+        self.excel_tree.pack(fill=tk.BOTH, expand=1)
+
+    def create_search_functionality(self):
+        self.search_frame = ttk.Frame(self.excel_frame)
+        self.search_frame.pack(fill=tk.X, padx=10, pady=10)
+        self.search_label = ttk.Label(self.search_frame, text="Search CIN:")
+        self.search_label.pack(side=tk.LEFT)
+        self.search_entry = ttk.Entry(self.search_frame)
+        self.search_entry.pack(side=tk.LEFT, padx=5)
+        self.search_button = ttk.Button(self.search_frame, text="Search", command=self.search_cin)
+        self.search_button.pack(side=tk.LEFT)
+    
     def __init__(self, master):
         self.master = master
         master.title("Attendance Tracker")
@@ -458,14 +499,9 @@ class AttendanceGUI:
         # Excel Data Tab
         self.excel_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.excel_frame, text='Excel Data')
-
-        self.excel_tree = ttk.Treeview(self.excel_frame, columns=('Row', 'First Name', 'Last Name', 'CIN', 'Major'), show='headings')
-        self.excel_tree.heading('Row', text='Row')
-        self.excel_tree.heading('First Name', text='First Name')
-        self.excel_tree.heading('Last Name', text='Last Name')
-        self.excel_tree.heading('CIN', text='CIN')
-        self.excel_tree.heading('Major', text='Major')
-        self.excel_tree.pack(fill=tk.BOTH, expand=1)
+        
+        self.create_excel_treeview()
+        self.create_search_functionality()
 
         # Refresh button for Excel data
         self.refresh_button = ttk.Button(self.excel_frame, text="Refresh Excel Data", command=self.refresh_excel_data)
@@ -486,16 +522,49 @@ class AttendanceGUI:
 
         self.master.bind(CUSTOM_EVENT, self.handle_attendance_logged)
 
+        # Add a text widget for messages
+        self.message_text = tk.Text(master, height=10, width=50)
+        self.message_text.pack(pady=10)
+
+        # tk toolkit, window close event
+        self.master.protocol("WM_DELETE_WINDOW",self.close_gui)
+
+    # "destroys" the gui
+    def close_gui(self):
+        self.display_message("\nExiting Program...\n")
+        time.sleep(2)
+        self.master.destroy()
+        raise SystemExit("GUI exited")
+
+    def display_message(self, message):
+        self.message_text.insert(tk.END, message + "\n")
+        self.message_text.see(tk.END)  # Scroll to the end
+
     def handle_attendance_logged(self, event):
         try:
             student_id, student_firstName, student_lastName, student_major, timestamp = studentData.split(',')
             self.tree.insert('', 'end', values=(student_id, student_firstName, student_lastName, student_major, timestamp))
         except Exception as e:
+            app.show_error("Error", f"Error handling attendance event: {e}")
             print(f"Error handling attendance event: {e}")
 
     def refresh_excel_data(self):
         self.excel_tree.delete(*self.excel_tree.get_children())
         load_excel_data(self)
+
+    def search_cin(self):
+        search_cin = self.search_entry.get()
+        if search_cin:
+            for item in self.excel_tree.get_children():
+                values = self.excel_tree.item(item)['values']
+                if str(values[3]) == search_cin:  # CIN is at index 3
+                    self.excel_tree.selection_set(item)
+                    self.excel_tree.focus(item)
+                    self.excel_tree.see(item)
+                    return
+            messagebox.showinfo("Search Result", f"No student found with CIN: {search_cin}")
+        else:
+            messagebox.showwarning("Search Error", "Please enter a CIN to search")
 
     def submit_row(self):
         row_number = self.row_entry.get()
@@ -504,15 +573,22 @@ class AttendanceGUI:
         self.row_entry.delete(0, tk.END)
 
 def main_loop():
-    global studentData
+    global studentData, previous_status
     try:
         while True:
-            print(" Waiting for a tag... ", end='\r', flush=True)
+
             status, cin, firstName, lastName, major = read_nfc()
             display = False
 
+            if status != previous_status:
+                if status == "NO_CARD":
+                    app.display_message("Waiting for a tag...")
+                    print("Waiting for a tag...", end='\r', flush=True)
+                previous_status = status
+
             if status == "EMPTY":
                 root.event_generate('<<EmptyNFC>>')  # Generate custom event for empty NFC
+                app.master.after(0, lambda: root.event_generate('<<EmptyNFC>>'))
             elif status == "SUCCESS":
                 if not is_cin_recorded(cin):
                     display = True
@@ -521,8 +597,12 @@ def main_loop():
                         studentData = f"{student_id},{student_firstName},{student_lastName},{student_major},{timestamp}"
                         root.event_generate(CUSTOM_EVENT, when='now')
             time.sleep(0.5)
+    except SystemExit as e:
+        print(f"\n{e}")
+        app.display_message(f"\n{e}")
     except KeyboardInterrupt:
         print("\nScript stopped by user.")
+        app.display_message("\nScript stopped by user.")
 
 if __name__ == "__main__":
     globalVar()
@@ -531,11 +611,23 @@ if __name__ == "__main__":
     initialize_csv(root)
     load_excel_data(app)  # Load initial Excel data
 
-    print("NFC Reader initialized. Waiting for tags...")
+    app.display_message("NFC Reader initialized.")
+    app.display_message(f"Attendance is being logged to: {csv_path}\n")
+    print("NFC Reader initialized.")
     print(f"Attendance is being logged to: {csv_path}")
     print("Press Ctrl+C in the console to stop the script.")
 
     nfc_thread = threading.Thread(target=main_loop, daemon=True)
     nfc_thread.start()
 
-    root.mainloop()
+    try:
+        root.mainloop()
+    except SystemExit:
+        # Goes to this if the GUI was closed which should make the exit safe and succesful
+        pass  
+
+    # Wait for the NFC thread to finish, about 2 seconds :)
+    nfc_thread.join(timeout=2)
+
+    print("\n***Program exited.***\n")
+
