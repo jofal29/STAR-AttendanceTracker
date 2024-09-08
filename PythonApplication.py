@@ -6,12 +6,20 @@ from smartcard.System import readers                # Import readers to interact
 from smartcard.util import toHexString              # Import toHexString to convert byte data to hex string
 from smartcard.Exceptions import NoCardException    # Import NoCardException for error handling
 import tkinter as tk                                # Import tkinter for creating the GUI
-#import tkinterFileDialog
+#import tkinterFileDialog                           # Import the FileDialog for User to pick file path for csv_path and folder_path
 from tkinter import ttk, filedialog, simpledialog   # Import ttk for themed tkinter widgets
 import threading                                    # Import threading for running NFC reading in a separate thread
 import openpyxl
 from smartcard.util import toBytes
-from flask import Flask                             # Import flask for web application
+# from flask import Flask                             # Import flask for web application
+
+# student_list = tk.filedialog.askopenfilename(title="yourmom", initaldir=os.path.expanduser('~'))   
+# print(student_list)
+file_path = filedialog.askopenfilename(
+        title="Master List of Students",
+        filetypes=[("Excel Files", "*.xlsx"), ("All files", "*.*")],
+    )
+print(file_path)
 
 # eventName = input('Enter a name of the event (NO SPACES): ')
 # eventName = "WelcomeMixer"
@@ -27,8 +35,16 @@ def get_event_details():
         exit()
     return event_name, folder_path
 
+# def get_student_list():
+#     root = tk.Tk()
+#     root.withdraw()
+#     student_list = filedialog.askopenfilename("")
+
 # Get event details
 eventName, folder_path = get_event_details()
+
+# Get one drive path details
+# fileName, oneDrive_folderPath = get_student_list()
 
 # Define custom event
 CUSTOM_EVENT = '<<AttendanceLogged>>'
@@ -38,11 +54,12 @@ CUSTOM_EVENT = '<<AttendanceLogged>>'
 csv_path = os.path.join(folder_path, f"{eventName}_attendance.csv")
 
 # Path to Excel file in OneDrive Folder for Students
-onedrive_path = os.path.join(os.path.expanduser('~'), 'OneDrive - Cal State LA', 'Registered ECST Transfers.xlsx')
+# onedrive_path = os.path.join(os.path.expanduser('~'), 'OneDrive - Cal State LA', 'Registered ECST Transfers.xlsx')
+onedrive_path = file_path
 
 # Creating the flask app and URL's path component at root for the app
-app = Flask(__name__)
-@app.route("/")
+# app = Flask(__name__)
+# @app.route("/")
 
 # The line creates a path that points to a file named attendance.csv in the Documents folder of the user's home directory.
 # os.path.expanduser('~'):
@@ -110,6 +127,29 @@ def get_registered_student_from_excel(rowNumber):
     except Exception as e:  # Handle any other exceptions
         print(f"Error reading card: {e}")
 
+# Function to set password 
+def set_password(connection, password):
+    # Convert password to bytes (assuming 4-byte password)
+    pwd_bytes = [int(password[i:i+2], 16) for i in range(0, len(password), 2)]
+    
+    # Write password to page 0x2B (43)
+    write_command = [0xFF, 0xD6, 0x00, 0x2B, 0x04] + pwd_bytes
+    response, sw1, sw2 = connection.transmit(write_command)
+    
+    if (sw1, sw2) != (0x90, 0x00):
+        print("Failed to write password")
+        return False
+    
+    # Enable password protection by writing to AUTH0 register (page 0x29)
+    auth0_command = [0xFF, 0xD6, 0x00, 0x29, 0x04, 0x04, 0x00, 0x00, 0x00]
+    response, sw1, sw2 = connection.transmit(auth0_command)
+    
+    if (sw1, sw2) != (0x90, 0x00):
+        print("Failed to enable password protection")
+        return False
+    
+    return True
+
 # Function to write NFC tag
 def write_nfc(firstName, lastName, cin, major):
     global readerStatusStated
@@ -156,6 +196,19 @@ def write_nfc(firstName, lastName, cin, major):
             return False
 
     print("Write operation completed successfully")
+
+    # Set password after writing data 
+    try:
+        # Lines 183-193 are NEW
+        password = "FFFF0000"  # Example password
+        if set_password(connection, password):
+            print("Password set successfully")
+        else:
+            print("Failed to set password")
+    except Exception as e:
+        print(f"Error writing to NFC: {e}")
+        return False
+
     return True
 
 # Function to establish connection
