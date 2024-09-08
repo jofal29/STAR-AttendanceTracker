@@ -630,4 +630,3 @@ if __name__ == "__main__":
     nfc_thread.join(timeout=2)
 
     print("\n***Program exited.***\n")
-
