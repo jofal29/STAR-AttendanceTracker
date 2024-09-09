@@ -4,8 +4,8 @@
 An attendance tracker that takes input data from NFC tags through a ACR122U NFC Reader, so that students and participants of events can have ease of access to university events.
 
 ## Features
-- Feature 1
-- Feature 2
+- Real-time attendance tracking with Microsoft Excel Integration
+- NFC tag read and write capabilities
 
 ## Installation
 We're using PyInstaller to allow anybody with a Windows computer to download and use our attendance tracker!
