@@ -5,7 +5,7 @@ An attendance tracker that takes input data from NFC tags through a ACR122U NFC 
 
 ## Features
 - Real-time attendance tracking with Microsoft Excel Integration
-- NFC tag read and write capabilities
+- NFC Tag (ntag215) read and write capabilities
 
 ## Installation
 We're using PyInstaller to allow anybody with a Windows computer to download and use our attendance tracker!
