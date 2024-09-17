@@ -16,7 +16,6 @@
         # previous_status : to prevent Waiting for Tag... message to keep repeating :b
         # cin_not_recorded_message_displayed : to prevent NFC does not have CIN# recorded repeatidly  
 
-
 import csv                                                      # Import the CSV module for reading and writing CSV files
 import os                                                       # Import the OS module for file and path operations
 import time                                                     # Import the time module for adding delays
@@ -226,15 +225,21 @@ def connectReader():
     r = readers()  # Get a list of available NFC readers
     if len(r) < 1:  # Check if any readers are available
         print("No reader found")
+        app.display_message("No Reader bruh")
         readerStatusStated = None
         return None
 
     reader = r[0]  # Select the first available reader
     if readerStatusStated == None:
         print(f"Using reader: {reader}")
+        app.display_message(f"Using reader: {reader}")
         readerStatusStated = True
 
-    connection = reader.createConnection()  # Create a connection to the reader
+    try:
+        connection = reader.createConnection()  # Create a connection to the reader
+    except Exception as e:
+        app.display_message(f"Unexpected error: {str(e)}")
+    
     return connection
 
 def process_row_input(row_number):
@@ -573,10 +578,10 @@ class AttendanceGUI:
         self.row_entry.delete(0, tk.END)
 
 def main_loop():
+    app.display_message("Reached main loop")
     global studentData, previous_status
     try:
         while True:
-
             status, cin, firstName, lastName, major = read_nfc()
             display = False
 
@@ -617,8 +622,11 @@ if __name__ == "__main__":
     print(f"Attendance is being logged to: {csv_path}")
     print("Press Ctrl+C in the console to stop the script.")
 
+    app.display_message("Attempting Threading")
     nfc_thread = threading.Thread(target=main_loop, daemon=True)
+    
     nfc_thread.start()
+    app.display_message("Threading successful")
 
     try:
         root.mainloop()
@@ -630,3 +638,6 @@ if __name__ == "__main__":
     nfc_thread.join(timeout=2)
 
     print("\n***Program exited.***\n")
+
+    # Use in terminal to create executable in the terminal of the folder (In the smae location where the python application is at)
+    # pyinstaller --onefile --windowed --hidden-import smartcard --hidden-import openpyxl --hidden-import smartcard.System --hidden-import smartcard.util --hidden-import tkinter --hidden-import threading PythonApplication.py
