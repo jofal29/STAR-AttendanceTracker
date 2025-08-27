@@ -585,12 +585,23 @@ class AttendanceGUI:
 
     def get_transfer_info(self, student_name):
         """Prompt user for transfer information when a student checks in"""
+        self.transfer_result = None
+        self.student_name_for_transfer = student_name
+        # Schedule the dialog to run on the main thread
+        self.master.after(0, self._show_transfer_dialog)
+        # Wait for result
+        while self.transfer_result is None:
+            time.sleep(0.1)
+        return self.transfer_result
+    
+    def _show_transfer_dialog(self):
+        """Show transfer dialog on main thread"""
         transfer_info = simpledialog.askstring(
             "Transfer Information", 
-            f"{student_name} is checking in.\nWhere did they transfer from? (Leave blank if not applicable):",
+            f"{self.student_name_for_transfer} is checking in.\nWhere did they transfer from? (Leave blank if not applicable):",
             initialvalue=""
         )
-        return transfer_info if transfer_info is not None else ""
+        self.transfer_result = transfer_info if transfer_info is not None else ""
 
 def main_loop():
     app.display_message("Reached main loop")
