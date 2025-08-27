@@ -1,0 +1,51 @@
+version = 1
+revision = 3
+requires-python = ">=3.13"
+
+[[package]]
+name = "et-xmlfile"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
+]
+
+[[package]]
+name = "openpyxl"
+version = "3.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "et-xmlfile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32619465d2f77b29a0469500e99012523b91cc4141cd1/openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050", size = 186464, upload-time = "2024-06-28T14:03:44.161Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910, upload-time = "2024-06-28T14:03:41.161Z" },
+]
+
+[[package]]
+name = "pyscard"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c1/d9/02085a08c61a8d7330a77d25884b0fb39b1057f14e5f1d660ea5368f0b80/pyscard-2.3.0.tar.gz", hash = "sha256:621928e217e3b1d3c791086bf0c9f307fc4ae004a9b1a430536acc1a6eb50003", size = 159897, upload-time = "2025-07-30T12:44:52.593Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/39/1fb681196a37435a5b5aaaae1c1bc59e9891e64a15c6641cb3f69deed0ad/pyscard-2.3.0-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:13b28ad005837cc56635059f104da9cee0d7fb385ee88251ef4131f95f8372df", size = 167949, upload-time = "2025-07-30T12:55:27.296Z" },
+    { url = "https://files.pythonhosted.org/packages/20/25/b54d20fc09f01b465bcf1fcb7570dc307d4fe08a3ba184e5a100dab783dc/pyscard-2.3.0-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:f87c88a1ee49a8fd94b536600d1c84285b5ba995cac297d8bb35a679a5828254", size = 137273, upload-time = "2025-07-30T12:44:50.656Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/0e/c1f003e75fccc4f2f9d90b8abf009239dfdad2f44cba1661209cff7738cc/pyscard-2.3.0-cp313-cp313-win32.whl", hash = "sha256:2b4d9715c056809c5f3cdbffa9d3b201b1a42cf2510c7ee7d323f2aba8257c3b", size = 138074, upload-time = "2025-07-30T12:55:29.095Z" },
+    { url = "https://files.pythonhosted.org/packages/00/e3/b21850a1ac0534284480bc22bc0211f82825c4a2b3d7d75f61827cd59f03/pyscard-2.3.0-cp313-cp313-win_amd64.whl", hash = "sha256:e3194a3918f380b26d4e99b2577bca901b096a784002fc9623c84711e1e5e085", size = 143988, upload-time = "2025-07-30T12:55:28.184Z" },
+]
+
+[[package]]
+name = "star-attendancetracker"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "openpyxl" },
+    { name = "pyscard" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "pyscard" },
+]

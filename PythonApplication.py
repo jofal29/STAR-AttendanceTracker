@@ -393,7 +393,7 @@ def read_nfc():
         return ("ERROR", None, None, None, None)
     
 # Function to log attendance
-def log_attendance(student_cin, student_firstName, student_lastName, student_major):
+def log_attendance(student_cin, student_firstName, student_lastName, student_major, transferred_from=""):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Get current timestamp
     global existing_entries
 
@@ -403,7 +403,7 @@ def log_attendance(student_cin, student_firstName, student_lastName, student_maj
         existing_entries.append(student_cin) # Add student CIN into global array
         with open(csv_path, 'a', newline='') as file:  # Open the CSV file in append mode
             writer = csv.writer(file)  # Create a CSV writer object
-            writer.writerow([student_cin, student_firstName, student_lastName, student_major, timestamp])  # Write the attendance record
+            writer.writerow([student_cin, student_firstName, student_lastName, student_major, transferred_from, timestamp])  # Write the attendance record
         app.display_message(f"\nLogged attendance for {student_firstName} {student_lastName} at {timestamp}\n")
         print(f"Logged attendance for {student_firstName} {student_lastName} at {timestamp}\n")
     else:
@@ -411,7 +411,7 @@ def log_attendance(student_cin, student_firstName, student_lastName, student_maj
         print(f"CIN {student_cin} already recorded.") 
         for entry in existing_entries:
             print(entry)
-    return student_cin, student_firstName, student_lastName, student_major, timestamp  # Return the logged data
+    return student_cin, student_firstName, student_lastName, student_major, transferred_from, timestamp  # Return the logged data
 
 def is_cin_recorded(cin):
     return cin in existing_entries
@@ -434,7 +434,7 @@ def initialize_csv(root):
     if not os.path.exists(csv_path):                        
         with open(csv_path, 'w', newline='') as file:       # If not, create a new CSV file
             writer = csv.writer(file)                       # Create a CSV writer object
-            writer.writerow(["Student CIN", "First Name", "Last Name", "Major" ,"Timestamp"])    # Write the header row
+            writer.writerow(["Student CIN", "First Name", "Last Name", "Major", "Transferred from?", "Timestamp"])    # Write the header row
         print("Created new attendance CSV file.")
     else:
         print("Attendance CSV file already exists.")
@@ -444,7 +444,12 @@ def initialize_csv(root):
             next(reader)  # Skip header
             for row in reader:
                 existing_entries.append(row[0])
-                studentData = f"{row[0]},{row[1]},{row[2]},{row[3]},{row[4]}"
+                # Handle both old format (5 columns) and new format (6 columns)
+                if len(row) >= 6:
+                    studentData = f"{row[0]},{row[1]},{row[2]},{row[3]},{row[4]},{row[5]}"
+                else:
+                    # Old format, add empty transferred_from field
+                    studentData = f"{row[0]},{row[1]},{row[2]},{row[3]},,{row[4]}"
                 root.event_generate(CUSTOM_EVENT, when='now')
 
 def load_excel_data(gui):
@@ -493,11 +498,12 @@ class AttendanceGUI:
         self.attendance_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.attendance_frame, text='Attendance')
 
-        self.tree = ttk.Treeview(self.attendance_frame, columns=('Student CIN', 'First Name', 'Last Name', 'Major', 'Timestamp'), show='headings')
+        self.tree = ttk.Treeview(self.attendance_frame, columns=('Student CIN', 'First Name', 'Last Name', 'Major', 'Transferred from?', 'Timestamp'), show='headings')
         self.tree.heading('Student CIN', text='Student CIN#')
         self.tree.heading('First Name', text='First Name')
         self.tree.heading('Last Name', text='Last Name')
         self.tree.heading('Major', text='Major')
+        self.tree.heading('Transferred from?', text='Transferred from?')
         self.tree.heading('Timestamp', text='Timestamp')
         self.tree.pack(fill=tk.BOTH, expand=1)
 
@@ -547,8 +553,8 @@ class AttendanceGUI:
 
     def handle_attendance_logged(self, event):
         try:
-            student_id, student_firstName, student_lastName, student_major, timestamp = studentData.split(',')
-            self.tree.insert('', 'end', values=(student_id, student_firstName, student_lastName, student_major, timestamp))
+            student_id, student_firstName, student_lastName, student_major, transferred_from, timestamp = studentData.split(',', 5)
+            self.tree.insert('', 'end', values=(student_id, student_firstName, student_lastName, student_major, transferred_from, timestamp))
         except Exception as e:
             app.show_error("Error", f"Error handling attendance event: {e}")
             print(f"Error handling attendance event: {e}")
@@ -577,6 +583,15 @@ class AttendanceGUI:
             process_row_input(row_number)
         self.row_entry.delete(0, tk.END)
 
+    def get_transfer_info(self, student_name):
+        """Prompt user for transfer information when a student checks in"""
+        transfer_info = simpledialog.askstring(
+            "Transfer Information", 
+            f"{student_name} is checking in.\nWhere did they transfer from? (Leave blank if not applicable):",
+            initialvalue=""
+        )
+        return transfer_info if transfer_info is not None else ""
+
 def main_loop():
     app.display_message("Reached main loop")
     global studentData, previous_status
@@ -597,9 +612,11 @@ def main_loop():
             elif status == "SUCCESS":
                 if not is_cin_recorded(cin):
                     display = True
-                    student_id, student_firstName, student_lastName, student_major, timestamp = log_attendance(cin, firstName, lastName, major)
+                    # Get transfer information from user
+                    transferred_from = app.get_transfer_info(f"{firstName} {lastName}")
+                    student_id, student_firstName, student_lastName, student_major, transferred_from_info, timestamp = log_attendance(cin, firstName, lastName, major, transferred_from)
                     if display:
-                        studentData = f"{student_id},{student_firstName},{student_lastName},{student_major},{timestamp}"
+                        studentData = f"{student_id},{student_firstName},{student_lastName},{student_major},{transferred_from_info},{timestamp}"
                         root.event_generate(CUSTOM_EVENT, when='now')
             time.sleep(0.5)
     except SystemExit as e:
